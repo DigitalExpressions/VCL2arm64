@@ -992,6 +992,8 @@ static inline Vec4fb is_nan(Vec4f const a) {
 #else
     return _mm_cmp_ps(a, a, 3); // compare unordered
 #endif
+#elif defined(__arm64)
+    return vmvnq_u32(vceqq_f32(a, a));
 #else
 return a != a; // This is not safe with -ffinite-math-only, -ffast-math, or /fp:fast compiler option
 #endif

@@ -20,6 +20,39 @@
 * Apache License version 2.0 or later.
 ******************************************************************************/
 
+/*
+ARM compatible include of the vectorclass
+
+on ARM/MAC the sse2neon lib will be imported
+and some parameters for the vectorclass are prepared.
+
+#IMPORTANT in vectorclass.h->instrset.h the cpuid function must be
+hidden, since it is not compatible with ARM-compilers.
+
+if missing, add the header-include check #if !defined(SSE2NEON_H)
+to the function to hide it when compiling on ARM
+
+remember that a dispatcher is not possible in this case.
+
+*/
+
+#if __arm64
+#include "sse2neon.h"
+
+// limit to 128byte, since we want to use ARM-neon
+#define MAX_VECTOR_SIZE 128
+
+//limit to sse4.2, sse2neon does not have any AVX instructions ( so far )
+#define INSTRSET 6
+
+//define unknown function
+#define _mm_getcsr() 1
+
+//simulate header included
+#define __X86INTRIN_H
+#endif
+// finally include vectorclass
+
 #ifndef INSTRSET_H
 #define INSTRSET_H 20200
 
@@ -106,7 +139,7 @@
 #ifdef _MSC_VER                        // Microsoft compiler or compatible Intel compiler
 #include <intrin.h>
 #pragma warning(disable: 6323 4514 4710 4711) // Diasble annoying warnings
-#else
+#elif __x86_64__
 #include <x86intrin.h>                 // Gcc or Clang compiler
 #endif
 
@@ -215,28 +248,37 @@ constexpr int V_DC = -256;
 // input:  functionnumber = leaf (eax), ecxleaf = subleaf(ecx)
 // output: output[0] = eax, output[1] = ebx, output[2] = ecx, output[3] = edx
 static inline void cpuid(int output[4], int functionnumber, int ecxleaf = 0) {
-#if defined(__GNUC__) || defined(__clang__)           // use inline assembly, Gnu/AT&T syntax
-    int a, b, c, d;
-    __asm("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(functionnumber), "c"(ecxleaf) : );
-    output[0] = a;
-    output[1] = b;
-    output[2] = c;
-    output[3] = d;
-
-#elif defined (_MSC_VER)                              // Microsoft compiler, intrin.h included
-    __cpuidex(output, functionnumber, ecxleaf);       // intrinsic function for CPUID
-
-#else                                                 // unknown platform. try inline assembly with masm/intel syntax
-    __asm {
-        mov eax, functionnumber
-        mov ecx, ecxleaf
-        cpuid;
-        mov esi, output
-        mov[esi], eax
-        mov[esi + 4], ebx
-        mov[esi + 8], ecx
-        mov[esi + 12], edx
-    }
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+    // Original x86/x86_64 implementation
+    #if (defined(__GNUC__) || defined(__clang__)) && defined(__x86_64__)
+        int a, b, c, d;
+        __asm("cpuid" : "=a"(a), "=b"(b), "=c"(c), "=d"(d) : "a"(functionnumber), "c"(ecxleaf) : );
+        output[0] = a;
+        output[1] = b;
+        output[2] = c;
+        output[3] = d;
+    #elif defined (_MSC_VER)
+        __cpuidex(output, functionnumber, ecxleaf);
+    #else
+        __asm {
+            mov eax, functionnumber
+            mov ecx, ecxleaf
+            cpuid;
+            mov esi, output
+            mov[esi], eax
+            mov[esi + 4], ebx
+            mov[esi + 8], ecx
+            mov[esi + 12], edx
+        }
+    #endif
+#elif defined(__aarch64__) || defined(__arm__)
+    // Assume NEON support on ARM
+    output[0] = 1; // Indicating support for SSE
+    output[1] = 1; // Indicating support for SSE2
+    output[2] = 1; // Indicating support for SSE3
+    output[3] = 1; // Indicating support for SSSE3, SSE4.1, SSE4.2
+#else
+    #error Unsupported platform
 #endif
 }
 
