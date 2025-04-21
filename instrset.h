@@ -40,7 +40,7 @@ remember that a dispatcher is not possible in this case.
 #include "sse2neon.h"
 
 // limit to 128byte, since we want to use ARM-neon
-#define MAX_VECTOR_SIZE 128
+#define MAX_VECTOR_SIZE 512
 
 //limit to sse4.2, sse2neon does not have any AVX instructions ( so far )
 #define INSTRSET 6
@@ -323,11 +323,17 @@ static inline int32_t vml_popcnt(uint64_t a) {
     // Clang version 6 uses a k register as parameter a when inlined from horizontal_find_first
 __attribute__((noinline))
 #endif
+#ifdef __x86_64__
 static uint32_t bit_scan_forward(uint32_t a) {
     uint32_t r;
     __asm("bsfl %1, %0" : "=r"(r) : "r"(a) : );
     return r;
 }
+#else
+static uint32_t bit_scan_forward(uint32_t a) {
+    return __builtin_ctz(a);
+}
+#endif
 static inline uint32_t bit_scan_forward(uint64_t a) {
     uint32_t lo = uint32_t(a);
     if (lo) return bit_scan_forward(lo);
